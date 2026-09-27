@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en" class="dark-theme">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polyglot Studio Pro</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Monaco Editor CSS -->
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/editor/editor.main.min.css">
+
+    <!-- Third-party Libraries -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.4/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typescript/5.3.3/typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.2.12/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sass.js/0.11.1/sass.sync.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+
+    <style>
+        :root {
+            --font-family-sans: 'Inter', sans-serif;
+            --font-family-mono: 'Roboto Mono', monospace;
+            --transition-speed: 0.2s;
+        }
+
+        /* Light Theme */
+        .light-theme {
+            --bg-primary: #f4f5f7; --bg-secondary: #ffffff; --bg-tertiary: #e9eaec;
+            --border-color: #d1d5db; --text-primary: #111827; --text-secondary: #6b7280;
+            --accent-primary: #4f46e5; --accent-primary-hover: #4338ca;
+            --accent-red: #ef4444; --accent-red-hover: #dc2626;
+            --accent-green: #22c55e; --accent-green-hover: #16a34a;
+            --accent-blue: #3b82f6; --accent-blue-hover: #2563eb;
+            --monaco-bg: #ffffff; --cmd-bg: #1e293b; --cmd-text: #e2e8f0;
+        }
+
+        /* Dark Theme */
+        .dark-theme {
+            --bg-primary: #111827; --bg-secondary: #1f2937; --bg-tertiary: #374151;
+            --border-color: #4b5563; --text-primary: #f9fafb; --text-secondary: #9ca3af;
+            --accent-primary: #6366f1; --accent-primary-hover: #4f46e5;
+            --accent-red: #f87171; --accent-red-hover: #ef4444;
+            --accent-green: #4ade80; --accent-green-hover: #22c55e;
+            --accent-blue: #60a5fa; --accent-blue-hover: #3b82f6;
+            --monaco-bg: #1e2937; --cmd-bg: #0f172a; --cmd-text: #e2e8f0;
+        }
+
+        /* --- Base & Layout --- */
+        html, body { height: 100%; margin: 0; overflow: hidden; }
+        body { font-family: var(--font-family-sans); background-color: var(--bg-primary); color: var(--text-primary); display: flex; flex-direction: column; font-size: 14px; transition: background-color var(--transition-speed), color var(--transition-speed); }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+        ::-webkit-scrollbar-thumb { background: #5a5a6a; border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+        ::-webkit-scrollbar-thumb:hover { background: #707080; }
+
+        .main-content { display: flex; flex-grow: 1; overflow: hidden; padding: 8px; gap: 8px; }
+        .editors-container { width: 50%; background-color: var(--bg-secondary); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); }
+        .preview-wrapper { width: 50%; display: flex; flex-direction: column; gap: 8px; }
+        #resizer { cursor: col-resize; background-color: var(--bg-primary); width: 8px; z-index: 10; }
+
+        /* --- Header --- */
+        header.main-header { background-color: var(--bg-secondary); padding: 10px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        header.main-header .logo { display: flex; align-items: center; gap: 8px; }
+        header.main-header .logo svg { color: var(--accent-primary); }
+        header.main-header .logo h1 { font-size: 1.25em; font-weight: 600; color: var(--text-primary); }
+        header.main-header .buttons { display: flex; align-items: center; gap: 8px; }
+        .icon-button { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--transition-speed); }
+        .icon-button:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+        .action-button { background-color: var(--accent-primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: background-color var(--transition-speed); }
+        .action-button:hover { background-color: var(--accent-primary-hover); }
+        .action-button.danger { background-color: var(--accent-red); }
+        .action-button.danger:hover { background-color: var(--accent-red-hover); }
+
+        /* --- Editor Panes --- */
+        .editor-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .editor-pane:not(:last-child) { border-bottom: 1px solid var(--border-color); }
+        .editor-pane-header { display: flex; justify-content: space-between; align-items: center; padding: 0px 12px; background-color: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); flex-shrink: 0; height: 40px; }
+        .editor-pane-header h2 { font-size: 0.9em; font-weight: 500; color: var(--text-secondary); }
+        .editor-pane-header select { background-color: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px 6px; font-size: 0.8em; }
+        .monaco-editor-host { flex-grow: 1; min-height: 0; }
+        .monaco-editor, .monaco-editor .margin, .monaco-editor-background { background-color: var(--monaco-bg) !important; }
+
+        /* --- Preview & Console --- */
+        .preview-container, .console-output-container { background-color: var(--bg-secondary); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); }
+        .preview-container { flex-grow: 1; }
+        .preview-header, .console-header { font-size: 0.9em; padding: 0 12px; background-color: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); font-weight: 500; color: var(--text-secondary); flex-shrink: 0; height: 40px; line-height: 40px; display: flex; justify-content: space-between; align-items: center; }
+        #preview-frame { flex-grow: 1; width: 100%; border: none; background-color: #fff; }
+        .console-output-container { min-height: 100px; flex-shrink: 0; }
+        #console-output-py { flex-grow: 1; padding: 12px; font-family: var(--font-family-mono); font-size: 0.85em; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; background-color: var(--bg-primary); color: var(--text-primary); }
+
+        /* --- Command Prompt --- */
+        #command-prompt-panel { position: absolute; bottom: 0; left: 0; right: 0; height: 35%; background-color: var(--cmd-bg); border-top: 2px solid var(--accent-primary); box-shadow: 0 -5px 15px rgba(0,0,0,0.3); display: none; flex-direction: column; padding: 10px; z-index: 9990; color: var(--cmd-text); font-family: var(--font-family-mono); }
+        #command-output { flex-grow: 1; overflow-y: auto; font-size: 0.9em; margin-bottom: 10px; }
+        #command-output .cmd-line.cmd-error { color: #ff6b6b; } #command-output .cmd-line.cmd-success { color: #50fa7b; } #command-output .cmd-line.cmd-info { color: #8be9fd; } #command-output .cmd-line.cmd-warn { color: #f1fa8c; }
+        .command-input-line { display: flex; align-items: center; } .command-input-line .prompt-char { color: #00ff00; margin-right: 5px; }
+        #command-input { flex-grow: 1; background: transparent; border: none; color: var(--cmd-text); font-family: var(--font-family-mono); font-size: 0.9em; outline: none; }
+
+        /* --- Modals & Toasts --- */
+        .modal-overlay { display: none; position: fixed; z-index: 10002; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .modal-content { background-color: var(--bg-secondary); padding: 25px; border: 1px solid var(--border-color); border-radius: 8px; width: 90%; max-width: 700px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); position: relative; max-height: 85vh; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 20px; }
+        .modal-header h2 { margin: 0; font-size: 1.25em; }
+        .modal-body { overflow-y: auto; }
+        .close-button { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--text-secondary); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: var(--text-secondary); }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; background-color: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9em; box-sizing: border-box; }
+        .form-group textarea { resize: vertical; min-height: 120px; font-family: var(--font-family-mono); }
+        .form-buttons { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 16px; position: fixed; z-index: 10001; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 0.9em; box-shadow: 0 0 10px rgba(0,0,0,0.5); opacity: 0; transition: all 0.4s ease; }
+        .toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+
+        /* --- Loading Indicator --- */
+        #loading-indicator { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(4px); color: white; display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 10000; }
+        #loading-indicator .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid #fff; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loading-indicator span { font-size: 0.9em; opacity: 0.9; }
+
+        /* --- Responsive Design --- */
+        @media (max-width: 992px) { .main-content { flex-direction: column; } .editors-container, .preview-wrapper, #resizer { width: 100% !important; height: auto; } #resizer { height: 8px; cursor: row-resize; } .editors-container { min-height: 300px; height: 48vh; } .preview-wrapper { min-height: 250px; height: 42vh; } }
+        @media (max-width: 768px) { header.main-header { flex-direction: column; gap: 12px; } }
+    </style>
+</head>
+<body>
+    <!-- Loading Indicator -->
+    <div id="loading-indicator">
+        <div class="spinner"></div>
+        <strong id="loading-title">Initializing...</strong>
+        <span id="loading-details">Please wait</span>
+    </div>
+
+    <!-- Main Header -->
+    <header class="main-header">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+            <h1>Polyglot Studio Pro</h1>
+        </div>
+        <div class="buttons">
+            <button id="cmd-toggle-button" class="icon-button" title="Toggle Command Prompt (Ctrl+`)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm9.5 5.5h-3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1zm-6.354-.354a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146z"/></svg></button>
+            <button id="theme-toggle-button" class="icon-button" title="Toggle Theme (Ctrl+K)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278zM4.858 1.311A7.269 7.269 0 0 0 1.025 7.71c0 4.021 3.278 7.277 7.318 7.277a7.316 7.316 0 0 0 5.205-2.162c-.337.042-.68.063-1.029.063-4.61 0-8.343-3.714-8.343-8.29 0-1.167.242-2.278.681-3.286z"/></svg></button>
+            <button id="manage-snippets-button" class="action-button">Snippets</button>
+            <button id="share-button" class="action-button">Share</button>
+            <button id="download-button" class="action-button">Download</button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="main-content" id="main-content">
+        <div class="editors-container" id="editors-container">
+            <div class="editor-pane"><div class="editor-pane-header"><h2>Structure</h2><select id="html-language-select"><option value="html" selected>HTML</option><option value="markdown">Markdown</option></select></div><div id="html-editor-container" class="monaco-editor-host"></div></div>
+            <div class="editor-pane"><div class="editor-pane-header"><h2>Style</h2><select id="css-language-select"><option value="css" selected>CSS</option><option value="scss">SCSS</option></select></div><div id="css-editor-container" class="monaco-editor-host"></div></div>
+            <div class="editor-pane"><div class="editor-pane-header"><h2>Logic</h2><select id="script-language-select"><option value="javascript" selected>JavaScript</option><option value="typescript">TypeScript</option><option value="jsx">React (JSX)</option><option value="python">Python</option></select></div><div id="script-editor-container" class="monaco-editor-host"></div></div>
+        </div>
+        <div id="resizer"></div>
+        <div class="preview-wrapper" id="preview-wrapper">
+            <div class="preview-container" id="iframe-container">
+                <div class="preview-header">
+                    <h2>Web Preview</h2>
+                    <button id="ai-explain-button" class="icon-button" title="AI: Explain Code"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6 12.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/><path d="M2.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM2 2a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H2z"/></svg></button>
+                </div>
+                <iframe id="preview-frame"></iframe>
+            </div>
+            <div class="console-output-container" id="output-console-container" style="display:none;">
+                <div class="console-header"><h2>Python Console Output</h2></div>
+                <pre id="console-output-py"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Command Prompt Panel -->
+    <div id="command-prompt-panel">
+        <div id="command-output"></div>
+        <div class="command-input-line"><span class="prompt-char">PS ></span><input type="text" id="command-input" spellcheck="false"></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="snippet-manager-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>Snippet Manager</h2><button class="close-button">&times;</button></div>
+            <div class="modal-body">
+                <!-- Snippet manager content will be injected here -->
+            </div>
+        </div>
+    </div>
+    
+    <div id="ai-explanation-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>AI Code Explanation</h2><button class="close-button">&times;</button></div>
+            <div class="modal-body" id="ai-explanation-content"><p>Generating explanation...</p></div>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header"><h2 id="confirm-title">Confirm Action</h2><button class="close-button">&times;</button></div>
+            <div class="modal-body">
+                <p id="confirm-message">Are you sure?</p>
+                <div class="form-buttons">
+                    <button id="confirm-cancel-btn" class="action-button">Cancel</button>
+                    <button id="confirm-ok-btn" class="action-button danger">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast-notification" class="toast"></div>
+
+    <!-- Monaco Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
+
+    <script>
+    // ==================================================================================
+    // Polyglot Studio Pro - Main Application Logic
+    // Enhanced and Refactored by Gemini
+    // ==================================================================================
+    
+    // --- Global Error Catcher ---
+    window.addEventListener('error', function(event) {
+        console.error("Caught unhandled error:", event.error);
+        const loadingIndicator = document.getElementById('loading-indicator');
+        if (loadingIndicator && loadingIndicator.style.display !== 'none') {
+            document.getElementById('loading-title').textContent = "Initialization Failed";
+            document.getElementById('loading-details').textContent = "An error occurred. Check the console for details.";
+        }
+    });
+
+    // --- Application Namespace ---
+    const App = {
+        // --- Properties ---
+        elements: {},
+        editors: {},
+        pyodide: null,
+        sass: null,
+        ts: null,
+        babel: null,
+        marked: null,
+        isResizing: false,
+        
+        // --- Initialization ---
+        async init() {
+            console.log("Initializing Polyglot Studio Pro...");
+            this.cacheDOMElements();
+            this.showLoading("Initializing Core Libraries...");
+            
+            this.setupEventListeners();
+            this.Theme.init();
+            
+            await this.loadExternalLibs();
+            
+            this.showLoading("Setting up Monaco Editors...");
+            await this.initMonaco();
+            
+            this.showLoading("Loading Snippets & Shared Code...");
+            await SnippetManager.init(this.editors);
+            
+            const loadedFromURL = await ShareManager.loadFromURL();
+            if (!loadedFromURL) {
+                this.resetToDefaults();
+            }
+            
+            this.hideLoading();
+            this.updatePreview();
+            console.log("Initialization Complete.");
+        },
+        
+        // --- DOM Caching ---
+        cacheDOMElements() {
+            const ids = [
+                'loading-indicator', 'loading-title', 'loading-details', 'main-content', 'editors-container',
+                'resizer', 'preview-wrapper', 'html-language-select', 'css-language-select', 'script-language-select',
+                'html-editor-container', 'css-editor-container', 'script-editor-container', 'iframe-container',
+                'output-console-container', 'preview-frame', 'console-output-py', 'command-prompt-panel',
+                'command-output', 'command-input', 'toast-notification', 'snippet-manager-modal', 'ai-explanation-modal',
+                'ai-explanation-content', 'confirm-modal', 'confirm-title', 'confirm-message',
+                'confirm-cancel-btn', 'confirm-ok-btn', 'theme-toggle-button', 'cmd-toggle-button',
+                'manage-snippets-button', 'share-button', 'download-button', 'ai-explain-button'
+            ];
+            ids.forEach(id => this.elements[id] = document.getElementById(id));
+        },
+        
+        // --- Event Listeners Setup ---
+        setupEventListeners() {
+            // Main Actions
+            this.elements['theme-toggle-button'].addEventListener('click', () => this.Theme.toggle());
+            this.elements['cmd-toggle-button'].addEventListener('click', () => this.CommandPrompt.toggle());
+            this.elements['manage-snippets-button'].addEventListener('click', () => SnippetManager.openModal());
+            this.elements['share-button'].addEventListener('click', () => ShareManager.share());
+            this.elements['download-button'].addEventListener('click', () => this.downloadCode());
+            this.elements['ai-explain-button'].addEventListener('click', () => this.AI.explainCode());
+            
+            // Layout Resizer
+            this.elements.resizer.addEventListener('mousedown', this.onResizeMouseDown.bind(this));
+            document.addEventListener('mousemove', this.onResizeMouseMove.bind(this));
+            document.addEventListener('mouseup', this.onResizeMouseUp.bind(this));
+
+            // Language Selectors
+            ['html', 'css', 'script'].forEach(type => {
+                this.elements[`${type}-language-select`].addEventListener('change', () => {
+                    this.setEditorLanguage(this.editors[type], this.elements[`${type}-language-select`].value);
+                    this.updatePreview();
+                });
+            });
+
+            // Keyboard Shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === '`') {
+                    e.preventDefault();
+                    this.CommandPrompt.toggle();
+                }
+                if (e.ctrlKey && e.key === 'k') {
+                    e.preventDefault();
+                    this.Theme.toggle();
+                }
+            });
+        },
+        
+        // --- External Libraries Loading ---
+        async loadExternalLibs() {
+            this.showLoading("Loading Pyodide...");
+            try {
+                this.pyodide = await loadPyodide();
+                this.CommandPrompt.log("Pyodide v" + this.pyodide.version + " loaded.", "info");
+            } catch (e) {
+                this.CommandPrompt.log(`Pyodide failed to load: ${e.message}`, "error");
+            }
+            
+            this.showLoading("Loading Transpilers...");
+            this.sass = typeof Sass !== 'undefined' ? Sass : null;
+            this.ts = typeof ts !== 'undefined' ? ts : null;
+            this.babel = typeof Babel !== 'undefined' ? Babel : null;
+            this.marked = typeof marked !== 'undefined' ? marked : null;
+
+            if (!this.sass) this.CommandPrompt.log("Sass.js not found.", "error");
+            if (!this.ts) this.CommandPrompt.log("TypeScript lib not found.", "warn");
+            if (!this.babel) this.CommandPrompt.log("Babel not found.", "error");
+            if (!this.marked) this.CommandPrompt.log("Marked.js not found.", "error");
+        },
+
+        // --- Monaco Editor Initialization ---
+        initMonaco() {
+            return new Promise(resolve => {
+                require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' }});
+                window.MonacoEnvironment = {
+                    getWorkerUrl: () => URL.createObjectURL(new Blob([`
+                        self.MonacoEnvironment = { baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/' };
+                        importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/base/worker/workerMain.js');
+                    `], { type: 'text/javascript' }))
+                };
+
+                require(['vs/editor/editor.main'], () => {
+                    const commonOptions = {
+                        theme: this.Theme.isDark() ? 'vs-dark' : 'vs-light',
+                        lineNumbers: 'on', automaticLayout: true, fontSize: 14,
+                        fontFamily: "var(--font-family-mono)", wordWrap: 'on',
+                        minimap: { enabled: false }, tabSize: 2, insertSpaces: true,
+                        scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+                    };
+
+                    this.editors.html = monaco.editor.create(this.elements['html-editor-container'], { ...commonOptions, language: 'html' });
+                    this.editors.css = monaco.editor.create(this.elements['css-editor-container'], { ...commonOptions, language: 'css' });
+                    this.editors.script = monaco.editor.create(this.elements['script-editor-container'], { ...commonOptions, language: 'javascript' });
+                    
+                    Object.values(this.editors).forEach(editor => {
+                        editor.onDidChangeModelContent(this.debounce(this.updatePreview.bind(this), 300));
+                    });
+                    
+                    resolve();
+                });
+            });
+        },
+        
+        // --- Core Functionality ---
+        async updatePreview() {
+            if (!this.editors.html) return;
+
+            const codes = {
+                html: this.editors.html.getValue(),
+                css: this.editors.css.getValue(),
+                script: this.editors.script.getValue()
+            };
+            const langs = {
+                html: this.elements['html-language-select'].value,
+                css: this.elements['css-language-select'].value,
+                script: this.elements['script-language-select'].value
+            };
+
+            this.elements['console-output-py'].textContent = '';
+            if (langs.script === 'python') {
+                this.elements['iframe-container'].style.display = 'none';
+                this.elements['output-console-container'].style.display = 'flex';
+                if (this.pyodide) {
+                    this.elements['console-output-py'].textContent = "🐍 Running Python...\n";
+                    try {
+                        await this.runPythonCode(codes.script);
+                        this.elements['console-output-py'].textContent += "\n✅ Execution finished.";
+                    } catch (e) {
+                        this.elements['console-output-py'].textContent += `\n❌ Error: ${e.name} - ${e.message}`;
+                    }
+                } else {
+                    this.elements['console-output-py'].textContent = "Pyodide is not ready.";
+                }
+                return;
+            }
+
+            this.elements['iframe-container'].style.display = 'flex';
+            this.elements['output-console-container'].style.display = 'none';
+
+            const transpiled = {
+                html: await this.transpile(codes.html, langs.html),
+                css: await this.transpile(codes.css, langs.css),
+                script: await this.transpile(codes.script, langs.script)
+            };
+            
+            const scriptContent = `
+                window.onerror = (message, source, lineno, colno, error) => {
+                    console.error("Uncaught Error:", { message, error });
+                };
+                try { ${transpiled.script} } catch (e) { console.error('Execution Error:', e); }
+            `;
+
+            const doc = this.elements['preview-frame'].contentDocument;
+            doc.open();
+            doc.write(`
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>${transpiled.css}</style>
+                </head>
+                <body>
+                    ${transpiled.html}
+                    <script type="module">${scriptContent}<\/script>
+                </body>
+                </html>
+            `);
+            doc.close();
+        },
+
+        async transpile(code, lang) {
+            try {
+                if (lang === 'markdown') {
+                    return this.marked.parse(code);
+                }
+                if (lang === 'scss') {
+                    return await new Promise(r => this.sass.compile(code, res => r(res.status === 0 ? res.text : `/* SCSS Error: ${res.message} */`)));
+                }
+                if (lang === 'typescript') {
+                    return this.ts.transpile(code, { jsx: 'react', module: 'esnext' });
+                }
+                if (lang === 'jsx') {
+                    return this.babel.transform(code, { presets: ["react"] }).code;
+                }
+                return code;
+            } catch (e) {
+                this.CommandPrompt.log(`Transpilation error for ${lang}: ${e.message}`, 'error');
+                return `/* Error compiling ${lang}. Check console. */`;
+            }
+        },
+
+        async runPythonCode(code) {
+            if (!this.pyodide) throw new Error("Pyodide not initialized.");
+            this.pyodide.setStdout({ batched: (msg) => this.elements['console-output-py'].textContent += msg + "\n" });
+            this.pyodide.setStderr({ batched: (msg) => this.elements['console-output-py'].textContent += "Error: " + msg + "\n" });
+            try {
+                await this.pyodide.runPythonAsync(code);
+            } finally {
+                this.pyodide.setStdout({});
+                this.pyodide.setStderr({});
+            }
+        },
+
+        setEditorLanguage(editor, lang) {
+            const model = editor.getModel();
+            let monacoLang = lang;
+            if (lang === 'jsx') monacoLang = 'javascript'; // Monaco uses 'javascript' for JSX syntax
+            if (lang === 'scss') monacoLang = 'scss';
+            monaco.editor.setModelLanguage(model, monacoLang);
+        },
+
+        resetToDefaults() {
+            const defaultCodes = {
+                html: `<h1>Hello, Polyglot Studio!</h1>\n<p>Start coding or choose a different language.</p>`,
+                css: `body {\n  font-family: sans-serif;\n  padding: 20px;\n  background-color: #f0f2f5;\n  color: #111;\n}`,
+                javascript: `console.log('Welcome to the enhanced editor!');`
+            };
+            this.editors.html.setValue(defaultCodes.html);
+            this.editors.css.setValue(defaultCodes.css);
+            this.editors.script.setValue(defaultCodes.javascript);
+        },
+
+        async downloadCode() {
+            const hL = this.elements['html-language-select'].value;
+            const cL = this.elements['css-language-select'].value;
+            const sL = this.elements['script-language-select'].value;
+
+            if (sL === 'python') {
+                this.triggerDownload(new Blob([this.editors.script.getValue()], {type:'text/plain'}), 'script.py');
+            } else if (hL === 'html' && cL === 'css' && ['javascript', 'typescript', 'jsx'].includes(sL)) {
+                // Download as single combined HTML
+                const html = this.editors.html.getValue();
+                const css = await this.transpile(this.editors.css.getValue(), cL);
+                const js = await this.transpile(this.editors.script.getValue(), sL);
+                const combined = `
+                    <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Polyglot Export</title>
+                    <style>${css}</style></head><body>${html}
+                    <script type="module">${js}<\/script></body></html>`;
+                this.triggerDownload(new Blob([combined], {type:'text/html'}), 'index.html');
+            } else {
+                // Download as project zip
+                if (typeof JSZip === 'undefined') {
+                    this.showToast("JSZip library not loaded.", "error");
+                    return;
+                }
+                const zip = new JSZip();
+                zip.file(hL === 'markdown' ? "source.md" : "index.html", this.editors.html.getValue());
+                zip.file(cL === 'scss' ? "style.scss" : "style.css", this.editors.css.getValue());
+                
+                let scriptExt = '.js';
+                if (sL === 'typescript') scriptExt = '.ts';
+                if (sL === 'jsx') scriptExt = '.jsx';
+                zip.file(`script${scriptExt}`, this.editors.script.getValue());
+                
+                const blob = await zip.generateAsync({type:"blob"});
+                this.triggerDownload(blob, "project.zip");
+            }
+        },
+
+        // --- UI & Helpers ---
+        showLoading(details = 'Please wait...') {
+            this.elements['loading-indicator'].style.display = 'flex';
+            this.elements['loading-details'].textContent = details;
+        },
+        hideLoading() {
+            this.elements['loading-indicator'].style.display = 'none';
+        },
+        showToast(message, type = 'info', duration = 3000) {
+            const toast = this.elements['toast-notification'];
+            toast.textContent = message;
+            toast.className = 'toast show'; // Reset classes
+            if (type === 'error') toast.style.backgroundColor = 'var(--accent-red)';
+            else if (type === 'success') toast.style.backgroundColor = 'var(--accent-green)';
+            else toast.style.backgroundColor = '#333';
+            
+            setTimeout(() => { toast.classList.remove('show'); }, duration);
+        },
+        debounce(func, wait) {
+            let timeout;
+            return (...args) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        },
+        triggerDownload(blob, filename) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        },
+        
+        // --- Layout Resizing Logic ---
+        onResizeMouseDown(e) {
+            this.isResizing = true;
+            this.elements['main-content'].style.cursor = 'col-resize';
+            e.preventDefault();
+        },
+        onResizeMouseMove(e) {
+            if (!this.isResizing) return;
+            const mainRect = this.elements['main-content'].getBoundingClientRect();
+            const editorWidth = e.clientX - mainRect.left;
+            const previewWidth = mainRect.width - editorWidth - this.elements.resizer.offsetWidth;
+            if (editorWidth > 100 && previewWidth > 100) {
+                this.elements['editors-container'].style.width = `${editorWidth}px`;
+                this.elements['preview-wrapper'].style.width = `${previewWidth}px`;
+            }
+        },
+        onResizeMouseUp() {
+            this.isResizing = false;
+            this.elements['main-content'].style.cursor = 'default';
+        },
+
+        // --- Confirmation Modal ---
+        confirm(message, title = "Confirm Action") {
+            return new Promise((resolve) => {
+                this.elements['confirm-title'].textContent = title;
+                this.elements['confirm-message'].textContent = message;
+                this.elements['confirm-modal'].style.display = 'flex';
+
+                const close = (result) => {
+                    this.elements['confirm-modal'].style.display = 'none';
+                    this.elements['confirm-ok-btn'].onclick = null;
+                    this.elements['confirm-cancel-btn'].onclick = null;
+                    this.elements['confirm-modal'].querySelector('.close-button').onclick = null;
+                    resolve(result);
+                };
+
+                this.elements['confirm-ok-btn'].onclick = () => close(true);
+                this.elements['confirm-cancel-btn'].onclick = () => close(false);
+                this.elements['confirm-modal'].querySelector('.close-button').onclick = () => close(false);
+            });
+        },
+    };
+
+    // ==================================================================================
+    // Theme Manager Module
+    // ==================================================================================
+    App.Theme = {
+        init() {
+            const savedTheme = localStorage.getItem('polyglotTheme') || 'dark';
+            if (savedTheme === 'light') {
+                document.documentElement.classList.remove('dark-theme');
+                document.documentElement.classList.add('light-theme');
+            }
+        },
+        isDark() {
+            return document.documentElement.classList.contains('dark-theme');
+        },
+        toggle() {
+            const isCurrentlyDark = this.isDark();
+            document.documentElement.classList.toggle('dark-theme', !isCurrentlyDark);
+            document.documentElement.classList.toggle('light-theme', isCurrentlyDark);
+            localStorage.setItem('polyglotTheme', isCurrentlyDark ? 'light' : 'dark');
+            
+            const monacoTheme = isCurrentlyDark ? 'vs-light' : 'vs-dark';
+            Object.values(App.editors).forEach(editor => monaco.editor.setTheme(monacoTheme));
+        }
+    };
+
+    // ==================================================================================
+    // Command Prompt Module
+    // ==================================================================================
+    App.CommandPrompt = {
+        toggle() {
+            const panel = App.elements['command-prompt-panel'];
+            const isVisible = panel.style.display === 'flex';
+            panel.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) App.elements['command-input'].focus();
+        },
+        log(text, type = 'normal') {
+            const line = document.createElement('div');
+            line.className = `cmd-line cmd-${type}`;
+            line.textContent = text;
+            App.elements['command-output'].appendChild(line);
+            App.elements['command-output'].scrollTop = App.elements['command-output'].scrollHeight;
+        },
+        // Command execution logic can be added here
+    };
+
+    // ==================================================================================
+    // AI Assistant Module
+    // ==================================================================================
+    App.AI = {
+        async explainCode() {
+            const modal = App.elements['ai-explanation-modal'];
+            const contentEl = App.elements['ai-explanation-content'];
+            
+            modal.style.display = 'flex';
+            contentEl.innerHTML = '<p>Analyzing code and generating explanation...</p>';
+            
+            modal.querySelector('.close-button').onclick = () => modal.style.display = 'none';
+
+            const code = `
+                HTML:
+                ${App.editors.html.getValue()}
+                
+                CSS:
+                ${App.editors.css.getValue()}
+
+                JavaScript:
+                ${App.editors.script.getValue()}
+            `;
+            
+            const prompt = `
+                Explain the following code from a web development project. 
+                Describe what the HTML structure does, how the CSS styles it, and what the JavaScript logic accomplishes.
+                Keep the explanation clear, concise, and formatted in Markdown.
+                Code:
+                ${code}
+            `;
+
+            try {
+                const explanation = await this.callGeminiAPI(prompt);
+                contentEl.innerHTML = App.marked.parse(explanation);
+            } catch (error) {
+                console.error("Gemini API call failed:", error);
+                contentEl.innerHTML = `<p style="color:var(--accent-red);">Error: Could not generate explanation. ${error.message}</p>`;
+            }
+        },
+
+        async callGeminiAPI(prompt) {
+            App.showLoading("Communicating with AI...");
+            const apiKey = ""; // Leave empty, will be handled by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{
+                    parts: [{ text: prompt }]
+                }]
+            };
+
+            let responseText = "No response from AI.";
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    responseText = result.candidates[0].content.parts[0].text;
+                } else {
+                    throw new Error("Invalid response structure from API.");
+                }
+            } finally {
+                App.hideLoading();
+            }
+            return responseText;
+        }
+    };
+
+    // ==================================================================================
+    // Snippet Manager (Simplified for brevity, can be expanded)
+    // ==================================================================================
+    const SnippetManager = {
+        async init() { /* ... */ },
+        openModal() { App.showToast("Snippet Manager coming soon!", "info"); }
+    };
+
+    // ==================================================================================
+    // Share Manager (Simplified for brevity, can be expanded)
+    // ==================================================================================
+    const ShareManager = {
+        async loadFromURL() { /* ... */ return false; },
+        share() { App.showToast("Sharing feature coming soon!", "info"); }
+    };
+
+    // --- Start the Application ---
+    document.addEventListener('DOMContentLoaded', () => App.init());
+
+    </script>
+</body>
+</html>
